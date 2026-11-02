@@ -107,20 +107,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (msg != null) message = msg
             } catch (e: Exception) {
                 reloadLocal()
-                if (!silent) message = "$label: ${e.message ?: e.javaClass.simpleName}"
+                if (!silent) message = if (e is com.google.android.gms.common.api.ApiException) GoogleAuth.explain(e)
+                    else "$label: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 busy = false
             }
         }
     }
 
-    fun onGoogleConsent(token: String?) {
+    fun onGoogleConsent(token: String?, error: String? = null) {
         googleConsent = null
         if (token != null) {
             repo.googleToken = token
             googleConnected = true
             afterConsent?.invoke()
-        } else message = "No se concedió el acceso a Google"
+        } else message = error ?: "No se concedió el acceso a Google"
         afterConsent = null
     }
 

@@ -17,14 +17,17 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -46,8 +49,9 @@ class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
 
     private val consentLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
-        val token = runCatching { GoogleAuth.tokenFromIntent(this, res.data) }.getOrNull()
-        vm.onGoogleConsent(token)
+        val r = runCatching { GoogleAuth.tokenFromIntent(this, res.data) }
+        vm.onGoogleConsent(r.getOrNull(), r.exceptionOrNull()?.let { GoogleAuth.explain(it) }
+            ?: if (res.resultCode != RESULT_OK) "Google: autorización cancelada o rechazada (código ${res.resultCode})" else null)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,8 +62,21 @@ class MainActivity : ComponentActivity() {
                 val snackbar = remember { SnackbarHostState() }
                 var tab by rememberSaveable { mutableIntStateOf(if (vm.session.isNotEmpty()) 1 else 0) }
 
-                LaunchedEffect(vm.message) {
-                    vm.message?.let { snackbar.showSnackbar(it); vm.message = null }
+                // Mensajes cortos como aviso abajo; los largos (errores) en un diálogo para poder leerlos enteros.
+                val msg = vm.message
+                LaunchedEffect(msg) {
+                    if (msg != null && msg.length <= 60) {
+                        vm.message = null
+                        snackbar.showSnackbar(msg, duration = SnackbarDuration.Short)
+                    }
+                }
+                if (msg != null && msg.length > 60) {
+                    AlertDialog(
+                        onDismissRequest = { vm.message = null },
+                        title = { Text("Aviso") },
+                        text = { Text(msg) },
+                        confirmButton = { TextButton(onClick = { vm.message = null }) { Text("OK") } },
+                    )
                 }
                 LaunchedEffect(vm.googleConsent) {
                     vm.googleConsent?.let {
